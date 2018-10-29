@@ -1,5 +1,5 @@
 var DEASYNC = require("deasync");
-function sync(fn, args, cb) {
+function runSync(fn, args, cb) {
     function reject(e) {
         result = {
             error: e
@@ -26,16 +26,21 @@ function sync(fn, args, cb) {
             }
         };
         args.push(_cb);
-        fn.apply(fn, args);
-        DEASYNC.loopWhile(function () {
-            return result === undefined;
-        });
-        if (result.error) {
-            throw (new Error(result.error));
+        try {
+            fn.apply(fn, args);
+            DEASYNC.loopWhile(function () {
+                return result === undefined;
+            });
+            if (result.error) {
+                throw (new Error(result.error));
+            }
+            else {
+                return result.result;
+            }
+        } catch (error) {
+            throw(error);
         }
-        else {
-            return result.result;
-        }
+       
     }
     else {
         var result = undefined;
@@ -54,98 +59,155 @@ function sync(fn, args, cb) {
         }
     }
 };
-function CallerResult(fn,args,promiseCaller,callback){
-    this.__fn=fn;
-    this.__args=args;
-    this.__promiseCaller=promiseCaller;
-    this.__callback=callback;
+function caller(fnList){
+    this._fnList=fnList;
 }
-CallerResult.prototype.sync=function(){
-    var me=this;
-    function exec(cb){
-        me.__callback(cb);
-    }
-    return sync(exec,[]);
-}
-CallerResult.prototype.then=function(cb){
-    if(!this.__promise){
-        this.__promise=new Promise(this.__promiseCaller);
-    }
-    return this.__promise.then(cb);
-}
-CallerResult.prototype.promise=function(){
-    return new Promise(this.__promiseCaller);
-}
-CallerResult.prototype.catch=function(cb){
-    if(!this.__promise){
-        this.__promise=new Promise(this.__promiseCaller);
-    }
-    return this.promise.catch(cb);
-}
-CallerResult.prototype.call=function(cb){
-    return this.callback(cb);
-}
-function Executor(){
-    this.__functions=[];
-    if(arguments.length>0){
-        for(var i=0;i<arguments[0].length;i++){
-            this.call(arguments[0][i]);
+caller.prototype.parallel=function(cb){
+    var fnList=this._fnList;
+    var promises=[];
+    for(var i=0;i<fnList.length;i++){
+        if(typeof fnList[i]==="function"){
+            var fn=fnList[i];
+            var promise = new Promise(function(resolve, reject) {
+                var callback=function(err,result){
+                    if(err){
+                        reject(err);
+                    }
+                    else {
+                        resolve(result);
+                    }
+                }
+                try {
+                    fn(callback);    
+                } catch (error) {
+                    reject(error);
+                }
+            });
+            promises.push(promise);
         }
     }
-    
-}
-Executor.prototype.call=function(){
-    
-    this.__functions.push(caller.apply(caller,arguments).promise());
-    return this;
-}
-Executor.prototype.then=function(cb){
-    if(!this.__allPromise){
-        this.__allPromise = Promise.all(this.__functions);
+    function run(cb){
+        Promise.all(promises).then(function(result){
+            cb(null,result)
+        }).catch(function(err){
+            cb(err);
+        })
     }
-    return this.__allPromise.then(cb);
+    if(cb){
+        run(cb);
+    }
+    else {
+        return runSync(run,[]);
+    }
+    
 }
-Executor.prototype.callback=function(cb){
-    Promise.all(this.__functions).then(function(r){
-        cb(null,r);
-    }).catch(function(ex){
-        cb(ex);
+caller.prototype.promiseParalel=function(cb){
+    var fnList=this._fnList;
+    var promises=[];
+    for(var i=0;i<fnList.length;i++){
+        if(typeof fnList[i]==="function"){
+            var fn=fnList[i];
+            var promise = new Promise(function(resolve, reject) {
+                var callback=function(err,result){
+                    if(err){
+                        reject(err);
+                    }
+                    else {
+                        resolve(result);
+                    }
+                }
+                try {
+                    fn(callback);    
+                } catch (error) {
+                    reject(error);
+                }
+            });
+            promises.push(promise);
+        }
+    }
+    return Promise.all(promises);
+    
+    
+}
+caller.prototype.promiseCall=function(){
+    var fnList=this._fnList;
+    var result=[];
+    function exec(done,index){
+        if(!index){
+            index=0;
+        }
+        if(index<fnList.length){
+            fnList[index](function(e,r){
+                if(e){
+                    done(e);
+                }
+                else {
+                    result.push(r);
+                    exec(done,index+1);
+                }
+            })
+        }
+        else {
+            done(null,result);
+        }
+    }
+    function run(cb){
+        exec(cb);
+    }
+    return new Promise(function(resolve,reject){
+        run(function(e,r){
+            if(e){
+                reject(e);
+            }
+            else {
+                resolve(result);
+            }
+        })
     });
 }
-Executor.prototype.sync=function(){
-    var me=this;
-    function exec(cb){
-        me.callback(cb);
-    }
-    return sync(exec,[]);
-}
-function caller(){
-    var fn=arguments[arguments.length-1];
-    var args=[];
-    for(var i=0;i<arguments.length-1;i++){
-        args.push(arguments[i]);
-    }
-    function callback(cb){
-        args.push(cb);
-        fn.apply(fn,args);
-    }
-    var promiseCaller= function(resolve,reject){
-        function cb(e,r){
-            if(e) reject(e);
-            else {
-                resolve(r);
-            }
+caller.prototype.call=function(cb){
+    var fnList=this._fnList;
+    var result=[];
+    function exec(done,index){
+        if(!index){
+            index=0;
         }
-        args.push(cb);
-        fn.apply(fn,args);
-    };
-    return new CallerResult(fn,args,promiseCaller,callback)
+        if(index<fnList.length){
+            fnList[index](function(e,r){
+                if(e){
+                    done(e);
+                }
+                else {
+                    result.push(r);
+                    exec(done,index+1);
+                }
+            })
+        }
+        else {
+            done(null,result);
+        }
+    }
+    function run(cb){
+        exec(cb);
+    }
+    if(cb){
+        run(cb);
+    }
+    else {
+        return runSync(run,[]); 
+    }
 }
-function parallel(){
-    return new Executor(arguments);
+function main(){
+    var fnList=arguments;
+    if(arguments.length===1 &&  arguments[0] instanceof Array){
+        fnList=arguments[0];
+    }
+    else if(arguments.length>1){
+        fnList=arguments;
+        
+        
+    }
+    return new caller(fnList);
 }
-module.exports = {
-    sync: sync,
-    caller:caller,
-    parallel:parallel
-}
+
+module.exports = main;
