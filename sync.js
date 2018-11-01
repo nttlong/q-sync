@@ -197,6 +197,14 @@ caller.prototype.call=function(cb){
         return runSync(run,[]); 
     }
 }
+caller.prototype.exec=function(fn,cb){
+    if(cb){
+        fn(cb);
+    }
+    else {
+        return runSync(fn,[]);
+    }
+}
 function main(){
     var fnList=arguments;
     if(arguments.length===1 &&  arguments[0] instanceof Array){
