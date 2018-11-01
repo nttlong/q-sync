@@ -217,5 +217,5 @@ function main(){
     }
     return new caller(fnList);
 }
-
+main.exec=caller.prototype.exec;
 module.exports = main;
