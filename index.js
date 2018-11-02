@@ -178,8 +178,14 @@ caller.prototype.call=function(cb){
                     done(e);
                 }
                 else {
-                    result.push(r);
-                    exec(done,index+1);
+                    if(fnList.length===1){
+                        done(null,r);
+                    }
+                    else {
+                        result.push(r);
+                        exec(done,index+1);
+                    }
+                    
                 }
             })
         }
@@ -197,6 +203,14 @@ caller.prototype.call=function(cb){
         return runSync(run,[]); 
     }
 }
+caller.prototype.exec=function(fn,cb){
+    if(cb){
+        fn(cb);
+    }
+    else {
+        return runSync(fn,[]);
+    }
+}
 function main(){
     var fnList=arguments;
     if(arguments.length===1 &&  arguments[0] instanceof Array){
@@ -209,5 +223,5 @@ function main(){
     }
     return new caller(fnList);
 }
-
+main.exec=caller.prototype.exec;
 module.exports = main;
