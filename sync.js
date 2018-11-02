@@ -178,8 +178,14 @@ caller.prototype.call=function(cb){
                     done(e);
                 }
                 else {
-                    result.push(r);
-                    exec(done,index+1);
+                    if(fnList.length===1){
+                        done(null,r);
+                    }
+                    else {
+                        result.push(r);
+                        exec(done,index+1);
+                    }
+                    
                 }
             })
         }
